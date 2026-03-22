@@ -106,6 +106,8 @@ const state = {
 };
 
 const elements = {
+  bootError: document.getElementById("boot-error"),
+  bootErrorText: document.getElementById("boot-error-text"),
   screens: [...document.querySelectorAll(".screen")],
   navButtons: [...document.querySelectorAll("[data-nav]")],
   durationButtons: [...document.querySelectorAll("[data-duration]")],
@@ -535,10 +537,10 @@ function finishSession() {
   elements.timerLabel.textContent = "Готово";
   elements.sessionStateLabel.textContent = "Сессия сохранена";
 
-  const moodBefore =
-    [...state.data.checkins]
-      .reverse()
-      .find((item) => item.type === "before" && sameDay(item.date, TODAY))?.value || 3;
+  const latestBeforeCheckin = [...state.data.checkins]
+    .reverse()
+    .find((item) => item.type === "before" && sameDay(item.date, TODAY));
+  const moodBefore = latestBeforeCheckin ? latestBeforeCheckin.value : 3;
   const moodAfter = state.selectedMood || Math.min(moodBefore + 1, 5);
 
   state.data.sessions.push({
@@ -600,7 +602,9 @@ function shareProgress() {
     return;
   }
 
-  window.navigator.clipboard?.writeText(message);
+  if (window.navigator.clipboard && typeof window.navigator.clipboard.writeText === "function") {
+    window.navigator.clipboard.writeText(message);
+  }
   elements.telegramStatus.textContent =
     "Ты не в Telegram, поэтому текст прогресса просто скопирован в буфер обмена.";
 }
@@ -619,7 +623,16 @@ function setupTelegram() {
   tg.ready();
   tg.expand();
   state.telegram.ready = true;
-  state.telegram.userName = tg.initDataUnsafe?.user?.first_name || "друг";
+  if (
+    tg.initDataUnsafe &&
+    tg.initDataUnsafe.user &&
+    typeof tg.initDataUnsafe.user.first_name === "string" &&
+    tg.initDataUnsafe.user.first_name
+  ) {
+    state.telegram.userName = tg.initDataUnsafe.user.first_name;
+  } else {
+    state.telegram.userName = "друг";
+  }
   document.body.classList.add("telegram-theme");
   elements.appModeLabel.textContent = "Telegram Mini App";
   elements.welcomeTitle.textContent = `Привет, ${state.telegram.userName}`;
@@ -679,4 +692,14 @@ function init() {
   refreshDashboard();
 }
 
-init();
+try {
+  init();
+} catch (error) {
+  if (elements.bootError && elements.bootErrorText) {
+    elements.bootError.classList.remove("hidden");
+    elements.bootErrorText.textContent =
+      error && error.message
+        ? `Техническая ошибка: ${error.message}`
+        : "Произошла техническая ошибка при запуске.";
+  }
+}
